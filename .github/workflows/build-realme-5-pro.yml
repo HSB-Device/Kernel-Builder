@@ -38,6 +38,9 @@ env:
   SUSFS_ENABLE : false
   SUSFS_FIXED : false
 
+  HOOK_METHOD: "syscall"
+  KPM_ENABLE: "false"
+
   AK3_SOURCE : "https://github.com/HSB-Device/AnyKernel3.git"
   AK3_BRANCH : "LanceX"
 
