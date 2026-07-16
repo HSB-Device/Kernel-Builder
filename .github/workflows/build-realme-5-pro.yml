@@ -29,11 +29,10 @@ env:
   DEFCONFIG_ORIGIN_IMAGE: ""
   DEFCONFIG_FROM_BOOT: false
 
-  KERNELSU_SOURCE : "https://github.com/backslashxx/KernelSU.git"
-  KERNELSU_BRANCH : "master"
+  KERNELSU_SOURCE : ""
+  KERNELSU_BRANCH : ""
 
   KERNELSU_AUTO_GET : "false"
-  KERNELSU_METHOD : "manual"
   KERNELSU_AUTO_FORK : "xxksu" # xxksu, rsuntk, next, resukisu and sukisu
 
   SUSFS_ENABLE : false
