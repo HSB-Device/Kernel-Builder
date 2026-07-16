@@ -43,8 +43,8 @@ env:
 
   BOOT_SOURCE : ""
 
-  NEED_DTBO : true
-  HAVE_NO_DTBO : "true"
+  NEED_DTBO : false
+  HAVE_NO_DTBO : false
   NEED_SAFE_DTBO : false
 
   ROM_TEXT : "LineageOS"
