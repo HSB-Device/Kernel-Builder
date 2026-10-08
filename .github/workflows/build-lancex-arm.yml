@@ -1,4 +1,4 @@
-name: Build LanceX (Pure Kernel ARM64)
+name: Build LanceX (RMX1971, ARM64)
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build-lancex-arm:
-    name: LanceX sdm670-perf (arm64 native)
+    name: LanceX sdm670-perf + AnyKernel3 (arm64 native)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
 
@@ -86,12 +86,43 @@ jobs:
             exit 1
           fi
 
+      - name: Pack AnyKernel3 flashable zip
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          git clone https://github.com/HSB-Device/AnyKernel3.git anykernel3 -b LanceX --depth=1
+          rm -rf anykernel3/.git
+
+          echo "=== AK3 device config ==="
+          grep -E 'kernel.string|do.devicecheck|device.name1|BLOCK=' anykernel3/anykernel.sh
+
+          cp device_kernel/out/arch/arm64/boot/Image.gz-dtb anykernel3/
+
+          cd anykernel3
+          zip -r9 "$GITHUB_WORKSPACE/LanceX-RMX1971-sdm670-perf.zip" . -x '*.git*'
+
+          echo "=== zip contents ==="
+          unzip -l "$GITHUB_WORKSPACE/LanceX-RMX1971-sdm670-perf.zip" | grep -E 'Image.gz-dtb|anykernel.sh|update-binary' || true
+          ls -la "$GITHUB_WORKSPACE/LanceX-RMX1971-sdm670-perf.zip"
+
+      - name: Verify flashable zip
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          ZIP="LanceX-RMX1971-sdm670-perf.zip"
+          if [ ! -f "$ZIP" ]; then
+            echo "[-] Zip not produced."
+            exit 1
+          fi
+          unzip -l "$ZIP" | grep -q 'Image.gz-dtb' || { echo "[-] Image.gz-dtb missing from zip."; exit 1; }
+          unzip -l "$ZIP" | grep -q 'META-INF/com/google/android/update-binary' || { echo "[-] Not a recovery-flashable zip."; exit 1; }
+          echo "[+] Zip is recovery-flashable and contains Image.gz-dtb."
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: lancex-sdm670-arm64
+          name: lancex-rmx1971-sdm670
           path: |
+            LanceX-RMX1971-*.zip
             device_kernel/out/arch/arm64/boot/Image*
             device_kernel/out/arch/arm64/boot/dts/qcom/*.dtb
             device_kernel/build.log
