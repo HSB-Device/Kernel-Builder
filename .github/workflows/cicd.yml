@@ -1,20 +1,86 @@
 version: 2.1
 
 jobs:
-  test-arm:
+  build-lancex-arm:
     machine:
       image: ubuntu-2204:current
     resource_class: arm.medium
     steps:
-      - checkout
       - run:
-          name: Verify ARM pipeline
+          name: Install build dependencies (aarch64-native toolchain)
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y \
+              build-essential bc bison flex libssl-dev libelf-dev \
+              zip unzip python3 git curl \
+              clang lld llvm \
+              gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+              gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
+
+      - run:
+          name: Show environment
           command: |
             echo "Arch: $(uname -m)"
             uname -a
             echo "CPUs: $(nproc)"
+            free -h || true
+            clang --version | head -n 1
+            aarch64-linux-gnu-gcc --version | head -n 1
+
+      - run:
+          name: Clone LanceX kernel source
+          command: |
+            git clone --recursive https://github.com/HSB-Device/LanceX.git device_kernel -b 16-bpf --depth=1
+            cd device_kernel
+            echo "=== Kernel version ==="
+            head -n 5 Makefile
+            echo "=== Defconfig check ==="
+            ls -l arch/arm64/configs/vendor/sdm670-perf_defconfig
+
+      - run:
+          name: Configure kernel (sdm670-perf)
+          command: |
+            cd device_kernel
+            make O=out ARCH=arm64 \
+              CC=clang LD=ld.lld \
+              CLANG_TRIPLE=aarch64-linux-gnu- \
+              CROSS_COMPILE=aarch64-linux-gnu- \
+              CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+              vendor/sdm670-perf_defconfig
+            echo "=== .config head ==="
+            head -n 15 out/.config || true
+
+      - run:
+          name: Build pure kernel
+          no_output_timeout: 45m
+          command: |
+            cd device_kernel
+            set -o pipefail
+            make -j$(nproc) O=out ARCH=arm64 \
+              CC=clang LD=ld.lld \
+              CLANG_TRIPLE=aarch64-linux-gnu- \
+              CROSS_COMPILE=aarch64-linux-gnu- \
+              CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+              2>&1 | tee build.log
+
+      - run:
+          name: Collect artifacts
+          when: always
+          command: |
+            mkdir -p artifacts
+            { uname -a; echo; nproc; echo; clang --version | head -n 1; } > artifacts/build-info.txt
+            echo "=== boot dir ===" >> artifacts/build-info.txt
+            ls -la device_kernel/out/arch/arm64/boot/ >> artifacts/build-info.txt 2>&1 || true
+            cp -v device_kernel/out/arch/arm64/boot/Image* artifacts/ 2>/dev/null || true
+            cp -v device_kernel/out/arch/arm64/boot/dts/qcom/*.dtb artifacts/ 2>/dev/null || true
+            cp -v device_kernel/build.log artifacts/ 2>/dev/null || true
+            ls -la artifacts
+
+      - store_artifacts:
+          path: artifacts
+          destination: lancex-sdm670
 
 workflows:
-  test-workflow:
+  lancex-build:
     jobs:
-      - test-arm
+      - build-lancex-arm
