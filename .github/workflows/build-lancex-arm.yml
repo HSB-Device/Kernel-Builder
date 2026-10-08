@@ -6,6 +6,10 @@ on:
     branches:
       - test-workflow
 
+concurrency:
+  group: lancex-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-lancex-arm:
     name: LanceX sdm670-perf (arm64 native)
@@ -25,10 +29,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential bc bison flex libssl-dev libelf-dev \
-            zip unzip python3 git curl \
+            zip unzip python3 git curl ccache \
             clang lld llvm \
             gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
             gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          key: lancex-sdm670-arm64
+          max-size: 2G
 
       - name: Clone LanceX kernel source
         run: |
@@ -43,7 +53,7 @@ jobs:
         run: |
           cd device_kernel
           make O=out ARCH=arm64 \
-            CC=clang LD=ld.lld \
+            CC="ccache clang" LD=ld.lld \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
@@ -56,11 +66,13 @@ jobs:
           cd device_kernel
           set -o pipefail
           make -j$(nproc) O=out ARCH=arm64 \
-            CC=clang LD=ld.lld \
+            CC="ccache clang" LD=ld.lld \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            2>&1 | tee build.log
+            Image dtbs 2>&1 | tee build.log
+          echo "=== ccache stats ==="
+          ccache -s || true
 
       - name: Verify kernel image exists
         run: |
