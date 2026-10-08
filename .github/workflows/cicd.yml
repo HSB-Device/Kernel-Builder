@@ -1,20 +1,20 @@
 version: 2.1
 
 jobs:
-  test-circleci:
-    docker:
-      - image: cimg/base:stable
+  test-arm:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.medium
     steps:
       - checkout
       - run:
-          name: Verify CircleCI pipeline
+          name: Verify ARM pipeline
           command: |
-            echo "CircleCI is working!"
-            echo "Branch: $CIRCLE_BRANCH"
-            echo "Commit: $CIRCLE_SHA1"
+            echo "Arch: $(uname -m)"
             uname -a
+            echo "CPUs: $(nproc)"
 
 workflows:
   test-workflow:
     jobs:
-      - test-circleci
+      - test-arm
