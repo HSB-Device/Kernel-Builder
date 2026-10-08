@@ -70,7 +70,7 @@ jobs:
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            Image dtbs 2>&1 | tee build.log
+            Image.gz-dtb dtbs 2>&1 | tee build.log
           echo "=== ccache stats ==="
           ccache -s || true
 
@@ -79,10 +79,10 @@ jobs:
           cd device_kernel
           echo "=== boot dir ==="
           ls -la out/arch/arm64/boot/ || true
-          if [ -f out/arch/arm64/boot/Image ] || [ -f out/arch/arm64/boot/Image.gz ] || [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
-            echo "[+] Kernel image found."
+          if [ -f out/arch/arm64/boot/Image.gz-dtb ]; then
+            echo "[+] Flashable image (Image.gz-dtb) found."
           else
-            echo "[-] No kernel image produced - build did NOT really succeed."
+            echo "[-] No Image.gz-dtb produced - artifact would not be flashable."
             exit 1
           fi
 
