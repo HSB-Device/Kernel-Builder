@@ -15,6 +15,9 @@ jobs:
     name: LanceX sdm670-perf + AnyKernel3 (arm64 native)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
+    env:
+      # Distinct name so this variant can never be confused with an earlier build.
+      ZIP_NAME: LanceX-RMX1971-sdm670-perf-khacfg.zip
 
     steps:
       - name: Show runner info
@@ -59,15 +62,29 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             vendor/sdm670-perf_defconfig
 
-          # RMX1971 (RUI2) init mounts the cgroup memory controller, and the
-          # kernel cmdline carries cgroup.memory=nokmem,nosocket. Without
-          # CONFIG_MEMCG that mount fails and init aborts -> bootloop with no
-          # pstore log. The stock/Khaenriah baseline that boots has MEMCG=y;
-          # the sdm670-perf_defconfig does not mention it at all, so enable it
-          # here instead of editing the kernel tree.
-          echo "=== Apply RMX1971 cgroup fix (MEMCG) ==="
+          # --- Khaenriah-parity config (RMX1971 / RUI2) -------------------
+          # The Khaenriah kernel that boots on this device differs from the
+          # sdm670-perf build in exactly 46 CONFIG symbols (IKCONFIG of
+          # /proc/config.gz vs IKCONFIG embedded in the built Image).
+          # 16 of those are KSU/SUSFS and 1 is LOCALVERSION, leaving ~29 real
+          # differences. Flip all of them in one build: a single flash then
+          # answers "is the bootloop config, or (source|toolchain)".
+          # Deliberately omitted: OPLUS_NFC, CPU_FREQ_GOV_SCHEDHORIZON,
+          # CPU_FREQ_GOV_BLU_SCHEDUTIL - Khaenriah-only symbols that have no
+          # Kconfig entry in this tree. Hidden symbols (TREE_SRCU,
+          # RCU_NEED_SEGCBLIST, ARCH_HAS_SET_MEMORY) are not settable here.
+          # LOCALVERSION gets a suffix so the running kernel is identifiable.
+          echo "=== Apply Khaenriah-parity config ==="
           scripts/config --file out/.config \
-            -e MEMCG -e MEMCG_SWAP -e MEMCG_SWAP_ENABLED -e PAGE_COUNTER -e CGROUP_WRITEBACK
+            --set-str LOCALVERSION "-BloodMoon-khacfg" \
+            -e MEMCG -e MEMCG_SWAP -e MEMCG_SWAP_ENABLED -e PAGE_COUNTER -e CGROUP_WRITEBACK \
+            -e PSI -e RT_GROUP_SCHED -e PROCESS_RECLAIM \
+            -e HZ_1000 -e CPU_FREQ_DEFAULT_GOV_SCHEDUTIL \
+            -d HZ_100 -d CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
+            -d DRM_CLIENT_BOOTSPLASH -d RCU_NOCB_CPU_ALL \
+            -d BPF_JIT_ALWAYS_ON -d BPF_JIT -d BPF_STREAM_PARSER -d STREAM_PARSER \
+            -d NET_ACT_BPF -d NET_SOCK_MSG \
+            -d CPU_BOOST -d CPU_FREQ_GOV_CONSERVATIVE -d CPU_FREQ_GOV_USERSPACE -d CPU_FREQ_GOV_ONDEMAND
           make O=out ARCH=arm64 \
             CC="ccache clang" LD=ld.lld \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -75,9 +92,26 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             olddefconfig
 
-          echo "=== cgroup config check ==="
-          grep -E '^CONFIG_(MEMCG|MEMCG_SWAP|PAGE_COUNTER|CGROUP_WRITEBACK|SWAP)=' out/.config
-          grep -q '^CONFIG_MEMCG=y' out/.config || { echo "[-] CONFIG_MEMCG did not stick."; exit 1; }
+          echo "=== parity check: what actually stuck ==="
+          for s in MEMCG MEMCG_SWAP MEMCG_SWAP_ENABLED PAGE_COUNTER CGROUP_WRITEBACK \
+                   PSI RT_GROUP_SCHED PROCESS_RECLAIM HZ HZ_1000 \
+                   CPU_FREQ_DEFAULT_GOV_SCHEDUTIL CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
+                   DRM_CLIENT_BOOTSPLASH RCU_NOCB_CPU_ALL \
+                   BPF_JIT BPF_JIT_ALWAYS_ON BPF_STREAM_PARSER STREAM_PARSER \
+                   NET_ACT_BPF NET_SOCK_MSG CPU_BOOST \
+                   CPU_FREQ_GOV_CONSERVATIVE CPU_FREQ_GOV_USERSPACE CPU_FREQ_GOV_ONDEMAND; do
+            grep -E "^CONFIG_${s}=" out/.config || echo "CONFIG_${s} is not set"
+          done
+          grep -E '^CONFIG_LOCALVERSION=' out/.config
+
+          for want in CONFIG_MEMCG=y CONFIG_PSI=y CONFIG_RT_GROUP_SCHED=y \
+                      CONFIG_PROCESS_RECLAIM=y CONFIG_HZ=1000; do
+            grep -q "^${want}$" out/.config || { echo "[-] ${want} did not stick."; exit 1; }
+          done
+          for want in CONFIG_DRM_CLIENT_BOOTSPLASH CONFIG_RCU_NOCB_CPU_ALL \
+                      CONFIG_BPF_JIT_ALWAYS_ON CONFIG_STREAM_PARSER; do
+            grep -q "^# ${want} is not set$" out/.config || { echo "[-] ${want} still enabled."; exit 1; }
+          done
 
           echo "=== .config head ==="
           head -n 15 out/.config
@@ -119,16 +153,16 @@ jobs:
           cp device_kernel/out/arch/arm64/boot/Image.gz-dtb anykernel3/
 
           cd anykernel3
-          zip -r9 "$GITHUB_WORKSPACE/LanceX-RMX1971-sdm670-perf.zip" . -x '*.git*'
+          zip -r9 "$GITHUB_WORKSPACE/$ZIP_NAME" . -x '*.git*'
 
           echo "=== zip contents ==="
-          unzip -l "$GITHUB_WORKSPACE/LanceX-RMX1971-sdm670-perf.zip" | grep -E 'Image.gz-dtb|anykernel.sh|update-binary' || true
-          ls -la "$GITHUB_WORKSPACE/LanceX-RMX1971-sdm670-perf.zip"
+          unzip -l "$GITHUB_WORKSPACE/$ZIP_NAME" | grep -E 'Image.gz-dtb|anykernel.sh|update-binary' || true
+          ls -la "$GITHUB_WORKSPACE/$ZIP_NAME"
 
       - name: Verify flashable zip
         run: |
           cd "$GITHUB_WORKSPACE"
-          ZIP="LanceX-RMX1971-sdm670-perf.zip"
+          ZIP="$ZIP_NAME"
           if [ ! -f "$ZIP" ]; then
             echo "[-] Zip not produced."
             exit 1
