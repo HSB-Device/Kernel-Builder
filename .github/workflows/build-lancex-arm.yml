@@ -69,13 +69,18 @@ jobs:
           # 16 of those are KSU/SUSFS and 1 is LOCALVERSION, leaving ~29 real
           # differences. Flip all of them in one build: a single flash then
           # answers "is the bootloop config, or (source|toolchain)".
-          # Deliberately omitted: OPLUS_NFC, CPU_FREQ_GOV_SCHEDHORIZON,
-          # CPU_FREQ_GOV_BLU_SCHEDUTIL - Khaenriah-only symbols that have no
-          # Kconfig entry in this tree. Hidden symbols (TREE_SRCU,
-          # RCU_NEED_SEGCBLIST, ARCH_HAS_SET_MEMORY) are not settable here, and
-          # STREAM_PARSER is "def_bool y" in this tree so it cannot be turned
-          # off at all. Those are Kconfig-revision artifacts rather than real
-          # behavioural differences.
+          # Deliberately omitted:
+          #  - OPLUS_NFC, CPU_FREQ_GOV_SCHEDHORIZON, CPU_FREQ_GOV_BLU_SCHEDUTIL:
+          #    Khaenriah-only symbols with no Kconfig entry in this tree.
+          #  - TREE_SRCU, RCU_NEED_SEGCBLIST, ARCH_HAS_SET_MEMORY: hidden
+          #    symbols, not settable from a .config.
+          #  - STREAM_PARSER: "def_bool y" here, cannot be turned off.
+          #  - BPF_JIT / BPF_JIT_ALWAYS_ON / BPF_STREAM_PARSER / NET_ACT_BPF /
+          #    NET_SOCK_MSG: kernel/bpf/core.c in this tree does not compile
+          #    with CONFIG_BPF_JIT off (19 errors - undeclared 'tmp' in the
+          #    non-JIT interpreter, PROG_NAME prototype mismatch). This alone
+          #    proves the LanceX tree is not the Khaenriah tree, which builds
+          #    fine with BPF_JIT off. None of the five are boot-relevant.
           # LOCALVERSION gets a suffix so the running kernel is identifiable.
           echo "=== Apply Khaenriah-parity config ==="
           scripts/config --file out/.config \
@@ -85,8 +90,6 @@ jobs:
             -e HZ_1000 -e CPU_FREQ_DEFAULT_GOV_SCHEDUTIL \
             -d HZ_100 -d CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
             -d DRM_CLIENT_BOOTSPLASH -d RCU_NOCB_CPU_ALL \
-            -d BPF_JIT_ALWAYS_ON -d BPF_JIT -d BPF_STREAM_PARSER \
-            -d NET_ACT_BPF -d NET_SOCK_MSG \
             -d CPU_BOOST -d CPU_FREQ_GOV_CONSERVATIVE -d CPU_FREQ_GOV_USERSPACE -d CPU_FREQ_GOV_ONDEMAND
           make O=out ARCH=arm64 \
             CC="ccache clang" LD=ld.lld \
@@ -116,7 +119,7 @@ jobs:
           # from .config entirely instead of being written as "# X is not set",
           # so test for =y rather than for the comment line.
           for want in CONFIG_DRM_CLIENT_BOOTSPLASH CONFIG_RCU_NOCB_CPU_ALL \
-                      CONFIG_BPF_JIT_ALWAYS_ON CONFIG_NET_ACT_BPF CONFIG_CPU_BOOST; do
+                      CONFIG_CPU_BOOST; do
             if grep -q "^${want}=y$" out/.config; then
               echo "[-] ${want} still enabled."
               fail=1
