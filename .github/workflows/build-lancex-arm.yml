@@ -58,6 +58,27 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             vendor/sdm670-perf_defconfig
+
+          # RMX1971 (RUI2) init mounts the cgroup memory controller, and the
+          # kernel cmdline carries cgroup.memory=nokmem,nosocket. Without
+          # CONFIG_MEMCG that mount fails and init aborts -> bootloop with no
+          # pstore log. The stock/Khaenriah baseline that boots has MEMCG=y;
+          # the sdm670-perf_defconfig does not mention it at all, so enable it
+          # here instead of editing the kernel tree.
+          echo "=== Apply RMX1971 cgroup fix (MEMCG) ==="
+          scripts/config --file out/.config \
+            -e MEMCG -e MEMCG_SWAP -e MEMCG_SWAP_ENABLED -e PAGE_COUNTER -e CGROUP_WRITEBACK
+          make O=out ARCH=arm64 \
+            CC="ccache clang" LD=ld.lld \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            olddefconfig
+
+          echo "=== cgroup config check ==="
+          grep -E '^CONFIG_(MEMCG|MEMCG_SWAP|PAGE_COUNTER|CGROUP_WRITEBACK|SWAP)=' out/.config
+          grep -q '^CONFIG_MEMCG=y' out/.config || { echo "[-] CONFIG_MEMCG did not stick."; exit 1; }
+
           echo "=== .config head ==="
           head -n 15 out/.config
 
