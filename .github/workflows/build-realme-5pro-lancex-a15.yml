@@ -154,46 +154,23 @@ jobs:
           grep -E '^CONFIG_KSU' out/.config | sort || echo "NO CONFIG_KSU IN .config"
           echo "=== FINAL .config (LOCALVERSION) ==="
           grep -E '^CONFIG_LOCALVERSION' out/.config || true
-          echo "=== ldapr count in out/vmlinux (must be 0 on armv8.2) ==="
-          if [ -f out/vmlinux ]; then
-            N=$(llvm-objdump -d out/vmlinux 2>/dev/null | grep -c 'ldapr' || true)
-            echo "ldapr=$N"
-          else
-            echo "out/vmlinux MISSING"; ls -l out/vmlinux* 2>/dev/null || true
-          fi
-          echo "=== KSU symbols in out/vmlinux ==="
-          if [ -f out/vmlinux ]; then
-            N=$(llvm-nm out/vmlinux 2>/dev/null | grep -c 'ksu_' || true)
-            echo "ksu_symbols=$N"
-          else
-            echo "ksu_symbols=unmeasured (no vmlinux)"
-          fi
-          echo "=== ksu.o artifacts ==="
+          echo "=== vmlinux present? ==="
+          ls -l out/vmlinux 2>/dev/null || echo "out/vmlinux MISSING"
+          echo "=== ldapr count (must be 0 on armv8.2) ==="
+          llvm-objdump -d out/vmlinux 2>/dev/null | grep -c ldapr || true
+          echo "=== KSU symbols in vmlinux ==="
+          llvm-nm out/vmlinux 2>/dev/null | grep -c ksu_ || true
+          echo "=== ksu.o built ==="
           ls -l out/drivers/kernelsu/ 2>/dev/null || echo "no out/drivers/kernelsu"
           echo "=== Image.gz-dtb ==="
-          ls -l out/arch/arm64/boot/Image.gz-dtb 2>/dev/null || echo "MISSING"
-          echo "=== kernel strings inside gzip (decompressed) ==="
-          python3 -c "
-import zlib,sys
-try:
-    d=open('out/arch/arm64/boot/Image.gz-dtb','rb').read()
-except Exception as e:
-    print('unreadable', e); sys.exit(0)
-z=zlib.decompressobj(31)
-try:
-    raw=z.decompress(d)
-except Exception as e:
-    print('decompress failed', e); sys.exit(0)
-print('decompressed_bytes=%d' % len(raw))
-for pat in (b'Linux version', b'kernelsu', b'KernelSU', b'ksu_'):
-    print('%s=%d' % (pat.decode(), raw.count(pat)))
-for line in raw.split(b'\x00'):
-    if line.startswith(b'Linux version'):
-        print('release:', line.decode('utf-8','replace'))
-        break
-"
-          echo "=== kernel release file ==="
-          cat out/include/config/kernel.release 2>/dev/null || echo "no out/include/config/kernel.release"
+          ls -l out/arch/arm64/boot/Image.gz-dtb 2>/dev/null || echo MISSING
+          echo "=== decompressed kernel strings ==="
+          gzip -dc out/arch/arm64/boot/Image.gz-dtb 2>/dev/null > /tmp/Image.raw || true
+          ls -l /tmp/Image.raw 2>/dev/null || echo "decompress failed"
+          strings -n 8 /tmp/Image.raw 2>/dev/null | grep -c -i kernelsu || true
+          strings -n 8 /tmp/Image.raw 2>/dev/null | grep -m1 -E "^Linux version" || true
+          echo "=== kernel release ==="
+          cat out/include/config/kernel.release 2>/dev/null || echo none
 
       - name: Pack Process
         uses: ./.github/workflows/pack-process
