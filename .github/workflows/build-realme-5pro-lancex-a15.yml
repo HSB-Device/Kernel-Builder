@@ -34,13 +34,13 @@ env:
   DEFCONFIG_ORIGIN_IMAGE: ""
   DEFCONFIG_FROM_BOOT: false
 
-  # Pure kernel: no KernelSU, no SUSFS, no root of any kind.
-  KERNELSU_SOURCE : ""
-  KERNELSU_BRANCH : ""
+  # Root: backslashxx/KernelSU pinned to a tag, cloned by build-ready's manual path.
+  # Nothing is committed to LanceX; the driver only ever exists in the CI workspace.
+  KERNELSU_SOURCE : "https://github.com/backslashxx/KernelSU.git"
+  KERNELSU_BRANCH : "v3.3.1-21"
   KERNELSU_AUTO_GET : "false"
-  KERNELSU_AUTO_FORK : ""
-  # "none" matches no branch in build-ready Set KernelSU -> hard no-op (no curl, no clone).
-  KERNELSU_METHOD : "none"
+  KERNELSU_AUTO_FORK : "xxksu"
+  KERNELSU_METHOD : "manual"
 
   SUSFS_ENABLE : false
   SUSFS_FIXED : false
@@ -119,8 +119,19 @@ jobs:
             echo "[+] sidelined proton host ld"
           fi
 
-          echo "[+] defconfig: ${{ env.DEFCONFIG_NAME }}"
+          # Runner-side config injection: the repo defconfig stays untouched.
+          CFG="$GITHUB_WORKSPACE/device_kernel/arch/arm64/configs/${{ env.DEFCONFIG_NAME }}"
+          {
+            echo "CONFIG_KSU=y"
+            echo "CONFIG_KSU_LSM_SECURITY_HOOKS=y"
+            echo "# CONFIG_KSU_KPROBES_KSUD is not set"
+            echo "# CONFIG_KSU_TAMPER_SYSCALL_TABLE is not set"
+            echo "# CONFIG_KSU_HACK_ARM64_BRANCH_LINK is not set"
+          } >> "$CFG"
+
+          echo "[+] defconfig: ${{ env.DEFCONFIG_NAME }} (KSU injected on runner)"
           echo "[+] branch: ${{ env.KERNEL_BRANCH }}"
+          tail -5 "$CFG"
 
       - name: Audit provenance and purity
         run: |
@@ -128,10 +139,10 @@ jobs:
           echo "[+] HEAD: $(git rev-parse HEAD)"
           echo "[+] working tree changes:"
           git status --porcelain | head -20
-          echo "[+] KSU/SUSFS references in tree (expect 0):"
-          grep -rl 'CONFIG_KSU' --include='*.c' --include='*.h' . 2>/dev/null | head -10 || true
-          echo "[+] KSU in defconfig (expect none):"
-          grep -c 'CONFIG_KSU' arch/arm64/configs/${{ env.DEFCONFIG_NAME }} || true
+          echo "[+] KSU driver symlink: $(readlink drivers/kernelsu || echo MISSING)"
+          echo "[+] KSU version: $(grep -h 'KSU_VERSION=' KernelSU/kernel/Makefile 2>/dev/null || echo '?')"
+          echo "[+] KSU config on runner defconfig:"
+          grep -n 'CONFIG_KSU' arch/arm64/configs/${{ env.DEFCONFIG_NAME }} || true
 
       - name: Build Process
         uses: ./.github/workflows/build-process
