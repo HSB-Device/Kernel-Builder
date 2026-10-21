@@ -147,6 +147,26 @@ jobs:
       - name: Build Process
         uses: ./.github/workflows/build-process
 
+      - name: Verify built kernel (config, ISA, KSU symbols)
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          echo "=== FINAL .config (KSU) ==="
+          grep -E '^CONFIG_KSU' out/.config | sort || echo "NO CONFIG_KSU IN .config"
+          echo "=== FINAL .config (LOCALVERSION) ==="
+          grep -E '^CONFIG_LOCALVERSION' out/.config || true
+          echo "=== ldapr count in vmlinux (must be 0 on armv8.2) ==="
+          if [ -f vmlinux ]; then
+            llvm-objdump -d vmlinux 2>/dev/null | grep -c 'ldapr' || echo 0
+          else
+            echo "vmlinux missing"
+          fi
+          echo "=== KSU symbols in vmlinux ==="
+          llvm-nm vmlinux 2>/dev/null | grep -c 'ksu_' || echo 0
+          echo "=== KSU strings in Image.gz-dtb ==="
+          strings out/arch/arm64/boot/Image.gz-dtb 2>/dev/null | grep -c -i 'kernelsu' || echo 0
+          echo "=== kernel release ==="
+          cat include/config/kernel.release 2>/dev/null || true
+
       - name: Pack Process
         uses: ./.github/workflows/pack-process
 
