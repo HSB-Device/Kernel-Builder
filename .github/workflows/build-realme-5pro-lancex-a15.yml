@@ -2,6 +2,10 @@ name: Build Realme 5 Pro (LanceX Pure Kernel A15)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ ci/lancex-build ]
+    paths:
+      - '.github/workflows/build-realme-5pro-lancex-a15.yml'
 
 env:
   # Device env
