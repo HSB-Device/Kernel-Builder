@@ -125,7 +125,7 @@ jobs:
             echo "CONFIG_KSU=y"
             echo "CONFIG_KSU_LSM_SECURITY_HOOKS=y"
             echo "# CONFIG_KSU_KPROBES_KSUD is not set"
-            echo "# CONFIG_KSU_TAMPER_SYSCALL_TABLE is not set"
+            echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE=y"
             echo "# CONFIG_KSU_HACK_ARM64_BRANCH_LINK is not set"
           } >> "$CFG"
 
@@ -152,6 +152,10 @@ jobs:
           cd $GITHUB_WORKSPACE/device_kernel
           echo "=== FINAL .config (KSU) ==="
           grep -E '^CONFIG_KSU' out/.config | sort || echo "NO CONFIG_KSU IN .config"
+          echo "=== TAMPER must be y ==="
+          grep -E '^CONFIG_KSU_TAMPER_SYSCALL_TABLE' out/.config || echo "TAMPER MISSING"
+          echo "=== COMPAT must be y ==="
+          grep -E '^CONFIG_COMPAT=' out/.config || echo "COMPAT MISSING"
           echo "=== FINAL .config (LOCALVERSION) ==="
           grep -E '^CONFIG_LOCALVERSION' out/.config || true
           echo "=== vmlinux present? ==="
