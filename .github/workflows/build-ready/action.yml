@@ -106,6 +106,7 @@ runs:
           fi
 
       - name: Cleaned KernelSU and Hook
+        if: env.KERNELSU_METHOD != 'none'
         shell: bash
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
@@ -249,6 +250,7 @@ runs:
           echo "KERNELSU_METHOD=${{ env.KERNELSU_METHOD }}" >> $GITHUB_ENV
 
       - name: SukiSU-Ultra Fixed
+        if: env.KERNELSU_METHOD != 'none'
         shell: bash
         run: |
           cd $GITHUB_WORKSPACE/device_kernel/drivers/kernelsu
@@ -337,6 +339,7 @@ runs:
           fi
 
       - name: Set KSU and SUSFS for DEFCONFIG
+        if: env.KERNELSU_METHOD != 'none'
         shell: bash
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
